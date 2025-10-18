@@ -6,6 +6,8 @@ from pathlib import Path
 import click
 
 from .core.watermark import PDFWatermarker, WatermarkConfig, WatermarkingError
+from .benchmark.runner import BenchmarkRunner
+from .benchmark.attacks import AttackType
 
 
 @click.group()
@@ -105,6 +107,71 @@ def batch_embed(directory, output_dir, watermark_text, strength, quality, dpi):
 
     except Exception as e:
         click.echo(f"✗ 错误: {e}", err=True)
+        raise click.Abort()
+
+
+@cli.command()
+@click.option("-o", "--output", "output_dir", default="./benchmark_results", help="Output directory for results")
+@click.option("-w", "--watermark", "watermark_text", default="BENCHMARK-2024", help="Watermark text")
+@click.option("--strength", default=12.0, type=float, help="Watermark strength (8-20)")
+@click.option("--mode", type=click.Choice(["quick", "full"]), default="quick", help="Benchmark mode")
+@click.option("--num-images", default=3, type=int, help="Number of images for full benchmark")
+@click.option(
+    "--attacks",
+    multiple=True,
+    type=click.Choice([a.value for a in AttackType]),
+    help="Specific attack types to test (can specify multiple)",
+)
+def benchmark(output_dir, watermark_text, strength, mode, num_images, attacks):
+    """Run robustness and invisibility benchmark suite"""
+    try:
+        config = WatermarkConfig(embed_strength=strength)
+        runner = BenchmarkRunner(config=config, output_dir=output_dir)
+
+        click.echo(f"Starting {mode} benchmark...")
+        click.echo(f"Watermark strength: {strength}")
+        click.echo(f"Output directory: {output_dir}")
+
+        attack_types = None
+        if attacks:
+            attack_types = [AttackType(a) for a in attacks]
+            click.echo(f"Testing attack types: {', '.join(attacks)}")
+
+        if mode == "quick":
+            aggregated = runner.run_quick_benchmark(
+                watermark_text=watermark_text, save_results=True
+            )
+            click.echo("\n" + "=" * 60)
+            click.echo("Quick Benchmark Results:")
+            click.echo("=" * 60)
+            click.echo(f"Total runs: {aggregated.total_runs}")
+            click.echo(f"Success rate: {aggregated.success_rate:.2%}")
+            if aggregated.avg_psnr:
+                click.echo(f"Average PSNR: {aggregated.avg_psnr:.2f} dB")
+            if aggregated.avg_ssim:
+                click.echo(f"Average SSIM: {aggregated.avg_ssim:.4f}")
+            click.echo("=" * 60)
+
+        else:
+            results = runner.run_full_benchmark(
+                num_images=num_images, watermark_text=watermark_text, save_results=True
+            )
+            click.echo("\n" + "=" * 60)
+            click.echo("Full Benchmark Results:")
+            click.echo("=" * 60)
+            for idx, aggregated in results.items():
+                click.echo(f"\nImage {idx + 1}:")
+                click.echo(f"  Success rate: {aggregated.success_rate:.2%}")
+                if aggregated.avg_psnr:
+                    click.echo(f"  Average PSNR: {aggregated.avg_psnr:.2f} dB")
+                if aggregated.avg_ssim:
+                    click.echo(f"  Average SSIM: {aggregated.avg_ssim:.4f}")
+            click.echo("=" * 60)
+
+        click.echo(f"\n✓ Benchmark complete. Results saved to: {output_dir}")
+
+    except Exception as e:
+        click.echo(f"✗ Benchmark failed: {e}", err=True)
         raise click.Abort()
 
 

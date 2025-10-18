@@ -130,7 +130,48 @@ pdf_blind_watermark/
 pytest tests/test_watermark.py
 ```
 
-> 测试使用合成图像，可根据实际业务场景扩展更多鲁棒性测试脚本。
+## 性能与鲁棒性基准测试
+
+系统配备了自动化的鲁棒性和不可见性基准测试套件：
+
+### 快速基准测试（简化攻击集）
+
+```bash
+python -m pdf_blind_watermark benchmark --mode quick
+```
+
+### 完整基准测试（所有攻击场景）
+
+```bash
+python -m pdf_blind_watermark benchmark --mode full --num-images 3
+```
+
+### 测试特定攻击类型
+
+```bash
+python -m pdf_blind_watermark benchmark \
+  --attacks jpeg_compression \
+  --attacks gaussian_noise \
+  --strength 14.0
+```
+
+基准测试支持以下攻击场景：
+- JPEG 压缩（多个质量级别）
+- 缩放（放大/缩小）
+- 旋转（±2°, ±5°, ±10°）
+- 裁剪
+- 高斯/椒盐噪声
+- 模糊滤波
+- 亮度/对比度调整
+- 截屏仿真
+
+测试结果包括：
+- 提取成功率
+- PSNR/SSIM（不可见性指标）
+- 比特误码率（BER）
+- 提取时间
+
+结果自动导出为 JSON、CSV 和可读性报告。详见 [BENCHMARK_GUIDE.md](BENCHMARK_GUIDE.md)。
 
 ## 开源协议
 
