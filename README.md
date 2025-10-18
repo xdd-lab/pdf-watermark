@@ -11,6 +11,9 @@
 - ✅ **纠错加固**：集成 Reed-Solomon 纠错，抵御噪声与失真
 - ✅ **透视校正**：自动检测页面边界，矫正拍照带来的透视畸变
 - ✅ **灵活配置**：可调节水印强度、嵌入分块大小、PDF 输出质量等参数
+- ✅ **文本隐写**：支持用户 ID、时间戳等结构化数据的隐写与提取
+- ✅ **基准测试套件**：内置性能和鲁棒性测试，支持生成详细报告
+- ✅ **合规集成**：提供审计追踪和合规性报告功能
 
 ## 技术原理概览
 
@@ -80,6 +83,15 @@ python -m pdf_blind_watermark extract -i photo.jpg -t image
 
 # 批量嵌入
 python -m pdf_blind_watermark batch-embed -d ./pdfs -o ./output -w "Secret"
+
+# 运行基准测试（新功能）
+python -m pdf_blind_watermark benchmark --suite full --format html
+
+# 运行性能测试
+python -m pdf_blind_watermark benchmark --suite performance --format markdown
+
+# 运行鲁棒性测试
+python -m pdf_blind_watermark benchmark --suite robustness --format json
 ```
 
 命令行参数支持调节水印强度、DPI、输出质量，以及是否启用透视校正等。
@@ -122,12 +134,95 @@ pdf_blind_watermark/
 └── __main__.py            # `python -m pdf_blind_watermark`
 ```
 
+## 文本隐写术（Steganography）功能
+
+系统支持结构化文本隐写，可在水印中嵌入用户 ID、时间戳、部门信息等：
+
+```python
+from datetime import datetime
+
+# 生成结构化水印
+user_id = "U12345"
+timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+watermark = f"USER:{user_id}|TIME:{timestamp}"
+
+# 嵌入
+watermarker.embed("document.pdf", "watermarked.pdf", watermark)
+
+# 提取并解析
+extracted = watermarker.extract("leaked.jpg", source_type="image")
+# 输出: "USER:U12345|TIME:20241018-143000"
+
+# 解析水印
+components = dict(part.split(":") for part in extracted.split("|"))
+print(f"泄露用户: {components['USER']}")
+print(f"访问时间: {components['TIME']}")
+```
+
+**应用场景**：
+- 文档泄露追溯
+- 内部审计追踪
+- 合规性检查
+- 访问权限管理
+
+详细示例请参考 `examples/advanced_steganography.py`
+
+## 基准测试与报告生成
+
+系统内置全面的基准测试套件，支持性能和鲁棒性评估：
+
+```python
+from pdf_blind_watermark.benchmark import BenchmarkSuite
+
+# 创建测试套件
+suite = BenchmarkSuite(output_dir="./benchmark_results")
+
+# 运行性能测试
+suite.run_standard_suite()
+
+# 运行鲁棒性测试
+suite.run_robustness_suite()
+
+# 生成 HTML 报告
+report_path = suite.generate_report("html")
+```
+
+**报告包含**：
+- 性能指标（嵌入/提取时间）
+- 鲁棒性评分（JPEG 压缩、缩放、噪声等）
+- 成功率统计
+- 配置参数建议
+
+详细使用请参考 `examples/run_benchmarks.py`
+
+### 合规性集成指南
+
+基准测试报告可直接用于：
+
+1. **安全审计**：验证水印系统的有效性
+2. **合规检查**：证明文档保护措施到位
+3. **性能监控**：确保系统符合 SLA 要求
+4. **配置优化**：根据业务需求调整参数
+
+**推荐指标**：
+- 成功率 >95%（生产环境）
+- 嵌入时间 <2s/页（用户体验）
+- JPEG Q70 抗性（实际应用）
+- 噪声抗性 σ<10（照片提取）
+
 ## 测试
 
 项目包含基础单元测试，验证嵌入与提取的闭环正确性：
 
 ```bash
+# 运行单元测试
 pytest tests/test_watermark.py
+
+# 运行性能测试
+python tests/test_performance.py
+
+# 运行完整基准测试套件
+python examples/run_benchmarks.py
 ```
 
 > 测试使用合成图像，可根据实际业务场景扩展更多鲁棒性测试脚本。

@@ -10,7 +10,7 @@ from .core.watermark import PDFWatermarker, WatermarkConfig, WatermarkingError
 
 @click.group()
 def cli():
-    """PDF全盲水印系统 - 嵌入和提取水印"""
+    """PDF全盲水印系统 - 嵌入和提取水印，包含基准测试功能"""
     pass
 
 
@@ -103,6 +103,41 @@ def batch_embed(directory, output_dir, watermark_text, strength, quality, dpi):
 
         click.echo(f"✓ 批量处理完成，输出目录: {output_dir}")
 
+    except Exception as e:
+        click.echo(f"✗ 错误: {e}", err=True)
+        raise click.Abort()
+
+
+@cli.command()
+@click.option("-o", "--output", "output_dir", default="./benchmark_results", help="基准测试结果输出目录")
+@click.option("--format", "report_format", type=click.Choice(["html", "json", "markdown"]), default="html", help="报告格式")
+@click.option("--suite", type=click.Choice(["performance", "robustness", "full"]), default="full", help="测试套件类型")
+def benchmark(output_dir, report_format, suite):
+    """运行基准测试套件并生成报告"""
+    try:
+        from .benchmark import BenchmarkSuite
+        
+        click.echo("=" * 60)
+        click.echo("PDF 全盲水印系统 - 基准测试")
+        click.echo("=" * 60)
+        
+        bench_suite = BenchmarkSuite(output_dir=output_dir)
+        
+        if suite in ["performance", "full"]:
+            click.echo("\n运行性能基准测试...")
+            bench_suite.run_standard_suite()
+        
+        if suite in ["robustness", "full"]:
+            click.echo("\n运行鲁棒性测试...")
+            bench_suite.run_robustness_suite()
+        
+        click.echo("\n生成报告...")
+        report_path = bench_suite.generate_report(report_format)
+        click.echo(f"✓ 报告已生成: {report_path}")
+        
+    except ImportError:
+        click.echo("✗ 基准测试模块未安装。请确保所有依赖已安装。", err=True)
+        raise click.Abort()
     except Exception as e:
         click.echo(f"✗ 错误: {e}", err=True)
         raise click.Abort()

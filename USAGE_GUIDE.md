@@ -7,8 +7,11 @@
 1. [基础使用](#基础使用)
 2. [高级配置](#高级配置)
 3. [常见场景](#常见场景)
-4. [故障排查](#故障排查)
-5. [最佳实践](#最佳实践)
+4. [文本隐写术](#文本隐写术)
+5. [基准测试与报告](#基准测试与报告)
+6. [合规性与审计](#合规性与审计)
+7. [故障排查](#故障排查)
+8. [最佳实践](#最佳实践)
 
 ## 基础使用
 
@@ -204,6 +207,482 @@ try:
 except Exception as e:
     print(f"提取失败: {e}")
 ```
+
+## 文本隐写术
+
+### 什么是文本隐写术
+
+文本隐写术（Text Steganography）是将结构化文本数据（如用户 ID、时间戳、元数据）隐藏在文档中的技术。与简单水印不同，隐写术支持更复杂的数据结构。
+
+### 结构化水印设计
+
+#### 基本格式
+
+```python
+# 推荐使用管道符分隔的键值对格式
+watermark = "KEY1:value1|KEY2:value2|KEY3:value3"
+
+# 示例
+watermark = "USER:U12345|TIME:20241018-143000|DEPT:FINANCE"
+```
+
+#### 实用示例
+
+**示例 1：用户追踪水印**
+
+```python
+from datetime import datetime
+
+def create_user_watermark(user_id: str) -> str:
+    """创建带用户 ID 和时间戳的水印"""
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    return f"USER:{user_id}|TIME:{timestamp}"
+
+# 使用
+watermark = create_user_watermark("U12345")
+watermarker.embed("contract.pdf", "contract_U12345.pdf", watermark)
+```
+
+**示例 2：文档追踪水印**
+
+```python
+def create_document_watermark(
+    document_id: str,
+    user_id: str,
+    department: str
+) -> str:
+    """创建完整文档追踪水印"""
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M")
+    return f"DOC:{document_id}|USER:{user_id}|DEPT:{department}|TIME:{timestamp}"
+
+# 使用
+watermark = create_document_watermark(
+    document_id="DOC-2024-0123",
+    user_id="U78901",
+    department="LEGAL"
+)
+```
+
+**示例 3：访问控制水印**
+
+```python
+def create_access_watermark(
+    user_id: str,
+    access_level: str,
+    expiry_date: str
+) -> str:
+    """创建访问控制水印"""
+    return f"USER:{user_id}|LEVEL:{access_level}|EXPIRE:{expiry_date}"
+
+# 使用
+watermark = create_access_watermark(
+    user_id="U45678",
+    access_level="CONFIDENTIAL",
+    expiry_date="20241231"
+)
+```
+
+### 提取与解析水印
+
+#### 基本解析
+
+```python
+def parse_watermark(watermark: str) -> dict:
+    """解析结构化水印"""
+    components = {}
+    parts = watermark.split("|")
+    
+    for part in parts:
+        if ":" in part:
+            key, value = part.split(":", 1)
+            components[key] = value
+    
+    return components
+
+# 使用
+extracted = watermarker.extract("leaked_document.jpg", source_type="image")
+components = parse_watermark(extracted)
+
+print(f"文档 ID: {components.get('DOC')}")
+print(f"用户 ID: {components.get('USER')}")
+print(f"部门: {components.get('DEPT')}")
+print(f"时间: {components.get('TIME')}")
+```
+
+#### 多页文档处理
+
+从多页 PDF 提取时，系统会自动使用多数投票机制：
+
+```python
+# 系统自动处理多页 PDF
+extracted = watermarker.extract("multi_page.pdf", source_type="pdf")
+
+# 内部流程：
+# 1. 从每一页提取水印
+# 2. 收集所有提取结果
+# 3. 使用多数投票选择最常见的结果
+# 4. 返回最可靠的水印
+
+# 你只需处理最终结果
+components = parse_watermark(extracted)
+```
+
+### 审计追踪工作流
+
+完整的审计追踪示例：
+
+```python
+import json
+from datetime import datetime
+from pathlib import Path
+
+class WatermarkAuditTrail:
+    """水印审计追踪系统"""
+    
+    def __init__(self, log_file: str = "watermark_audit.json"):
+        self.log_file = Path(log_file)
+        self.logs = self._load_logs()
+    
+    def _load_logs(self):
+        if self.log_file.exists():
+            with open(self.log_file) as f:
+                return json.load(f)
+        return []
+    
+    def _save_logs(self):
+        with open(self.log_file, "w") as f:
+            json.dump(self.logs, f, indent=2)
+    
+    def log_embed(self, document_id: str, user_id: str, watermark: str):
+        """记录水印嵌入事件"""
+        entry = {
+            "timestamp": datetime.now().isoformat(),
+            "event_type": "EMBED",
+            "document_id": document_id,
+            "user_id": user_id,
+            "watermark": watermark
+        }
+        self.logs.append(entry)
+        self._save_logs()
+    
+    def log_extraction(self, source: str, watermark: str, success: bool):
+        """记录水印提取事件"""
+        entry = {
+            "timestamp": datetime.now().isoformat(),
+            "event_type": "EXTRACT",
+            "source": source,
+            "watermark": watermark,
+            "success": success
+        }
+        self.logs.append(entry)
+        self._save_logs()
+    
+    def find_by_user(self, user_id: str):
+        """查找用户相关的所有事件"""
+        return [log for log in self.logs if log.get("user_id") == user_id]
+
+# 使用示例
+audit = WatermarkAuditTrail()
+
+# 嵌入时记录
+watermark = create_user_watermark("U12345")
+watermarker.embed("doc.pdf", "doc_watermarked.pdf", watermark)
+audit.log_embed("DOC-001", "U12345", watermark)
+
+# 提取时记录
+try:
+    extracted = watermarker.extract("leaked.jpg", source_type="image")
+    audit.log_extraction("leaked.jpg", extracted, True)
+    
+    # 分析泄露源
+    components = parse_watermark(extracted)
+    responsible_user = components.get("USER")
+    print(f"文档泄露追溯到用户: {responsible_user}")
+    
+    # 查找该用户的所有活动
+    user_history = audit.find_by_user(responsible_user)
+    print(f"该用户历史记录: {len(user_history)} 条")
+    
+except Exception as e:
+    audit.log_extraction("leaked.jpg", "", False)
+    print(f"提取失败: {e}")
+```
+
+## 基准测试与报告
+
+### 运行基准测试
+
+#### 命令行方式
+
+```bash
+# 运行完整测试套件（性能 + 鲁棒性）
+python -m pdf_blind_watermark benchmark --suite full --format html
+
+# 仅运行性能测试
+python -m pdf_blind_watermark benchmark --suite performance --format markdown
+
+# 仅运行鲁棒性测试
+python -m pdf_blind_watermark benchmark --suite robustness --format json
+
+# 指定输出目录
+python -m pdf_blind_watermark benchmark --suite full --format html -o ./my_results
+```
+
+#### Python API 方式
+
+```python
+from pdf_blind_watermark.benchmark import BenchmarkSuite
+
+# 创建测试套件
+suite = BenchmarkSuite(output_dir="./benchmark_results")
+
+# 运行性能基准测试
+suite.run_standard_suite()
+
+# 运行鲁棒性测试
+suite.run_robustness_suite()
+
+# 生成不同格式的报告
+html_report = suite.generate_report("html")
+json_report = suite.generate_report("json")
+md_report = suite.generate_report("markdown")
+
+print(f"HTML 报告: {html_report}")
+print(f"JSON 报告: {json_report}")
+print(f"Markdown 报告: {md_report}")
+```
+
+### 自定义基准测试
+
+```python
+from pdf_blind_watermark.benchmark import BenchmarkSuite
+from pdf_blind_watermark.core.watermark import WatermarkConfig
+
+suite = BenchmarkSuite()
+
+# 测试自定义配置
+custom_config = WatermarkConfig(
+    embed_strength=14.0,
+    ecc_symbols=40,
+    dpi=160,
+    quality=88
+)
+
+result = suite.run_performance_benchmark(
+    test_name="Custom Configuration",
+    config=custom_config,
+    image_size=(1240, 1754),
+    watermark_text="CUSTOM-TEST"
+)
+
+print(f"嵌入时间: {result.embed_time:.3f}s")
+print(f"提取时间: {result.extract_time:.3f}s")
+print(f"成功: {result.match_success}")
+```
+
+### 理解基准测试报告
+
+#### 性能指标
+
+**嵌入时间 (Embed Time)**
+- **含义**：将水印嵌入到图像所需的时间
+- **典型值**：0.3s - 2.0s/页
+- **影响因素**：DPI、图像尺寸、配置参数
+- **建议**：生产环境应 <2s/页
+
+**提取时间 (Extract Time)**
+- **含义**：从图像提取水印所需的时间
+- **典型值**：嵌入时间的 50-70%
+- **影响因素**：图像质量、噪声水平
+- **建议**：应急响应需要 <1s/页
+
+**成功率 (Success Rate)**
+- **含义**：成功提取正确水印的百分比
+- **目标值**：>95% 用于生产环境
+- **低于 90%**：需要调整配置
+
+#### 鲁棒性指标
+
+**JPEG 压缩抗性**
+
+| 质量等级 | 期望结果 | 配置建议 |
+|---------|---------|---------|
+| Q90+    | ✓ 应该通过 | 所有配置 |
+| Q70-90  | ✓ 应该通过 | embed_strength ≥12 |
+| Q50-70  | ⚠ 可能失败 | embed_strength ≥14, ecc_symbols ≥32 |
+| Q<50    | ✗ 通常失败 | embed_strength ≥16, ecc_symbols ≥48 |
+
+**缩放抗性**
+
+| 缩放比例 | 期望结果 | 说明 |
+|---------|---------|------|
+| 0.75+   | ✓ 优秀 | 正常截图场景 |
+| 0.5-0.75 | ✓ 良好 | 缩略图场景 |
+| 0.25-0.5 | ⚠ 中等 | 需要高强度配置 |
+| <0.25   | ✗ 差 | 信息损失过多 |
+
+**噪声抗性（高斯噪声）**
+
+| Sigma 值 | 期望结果 | 场景 |
+|---------|---------|------|
+| 0-10    | ✓ 优秀 | 清晰照片、截图 |
+| 10-15   | ⚠ 中等 | 低光照照片 |
+| 15+     | ✗ 差 | 严重噪声环境 |
+
+### 报告格式说明
+
+#### HTML 报告
+
+- **优点**：可视化好，易于分享
+- **包含**：表格、图表、颜色编码
+- **适用于**：管理层汇报、文档归档
+
+#### JSON 报告
+
+- **优点**：结构化数据，易于程序处理
+- **包含**：完整测试数据、元数据
+- **适用于**：自动化分析、CI/CD 集成
+
+#### Markdown 报告
+
+- **优点**：纯文本，易于版本控制
+- **包含**：表格、统计数据
+- **适用于**：技术文档、GitHub 等
+
+## 合规性与审计
+
+### 合规性报告集成
+
+基准测试报告可用于以下合规场景：
+
+#### 1. ISO 27001 信息安全管理
+
+**证明点**：
+- A.8.2.3 处理资产：证明文档有防泄露措施
+- A.13.2.3 电子信息传输：证明传输文档可追溯
+
+**所需指标**：
+- 水印成功率 >95%
+- 提取成功案例证明
+- 审计日志完整性
+
+#### 2. GDPR 数据保护
+
+**证明点**：
+- 第 32 条：技术和组织措施
+- 第 33 条：数据泄露通知能力
+
+**所需指标**：
+- 用户 ID 嵌入和提取成功率
+- 泄露追溯时间 <1 小时
+- 审计追踪记录
+
+#### 3. SOC 2 安全审计
+
+**证明点**：
+- CC6.1：逻辑访问控制
+- CC7.2：系统监控
+
+**所需指标**：
+- 系统可用性 >99%
+- 日志保留 >1 年
+- 定期基准测试（至少季度一次）
+
+### 审计报告生成
+
+```python
+from datetime import datetime
+import json
+
+class ComplianceReporter:
+    """生成合规性报告"""
+    
+    def __init__(self, benchmark_results: dict):
+        self.results = benchmark_results
+    
+    def generate_compliance_report(self) -> dict:
+        """生成合规性报告"""
+        summary = self.results.get("summary", {})
+        
+        report = {
+            "report_date": datetime.now().isoformat(),
+            "compliance_status": self._assess_compliance(summary),
+            "metrics": {
+                "success_rate": summary.get("success_rate", 0),
+                "avg_embed_time": summary.get("avg_embed_time", 0),
+                "avg_extract_time": summary.get("avg_extract_time", 0),
+                "total_tests": summary.get("total_tests", 0),
+            },
+            "recommendations": self._generate_recommendations(summary),
+            "compliance_certifications": {
+                "iso27001": self._check_iso27001(summary),
+                "gdpr": self._check_gdpr(summary),
+                "soc2": self._check_soc2(summary),
+            }
+        }
+        
+        return report
+    
+    def _assess_compliance(self, summary: dict) -> str:
+        success_rate = summary.get("success_rate", 0)
+        if success_rate >= 0.95:
+            return "COMPLIANT"
+        elif success_rate >= 0.90:
+            return "WARNING"
+        else:
+            return "NON_COMPLIANT"
+    
+    def _check_iso27001(self, summary: dict) -> bool:
+        """检查 ISO 27001 合规性"""
+        return summary.get("success_rate", 0) >= 0.95
+    
+    def _check_gdpr(self, summary: dict) -> bool:
+        """检查 GDPR 合规性"""
+        return (summary.get("success_rate", 0) >= 0.95 and
+                summary.get("avg_extract_time", 999) < 1.0)
+    
+    def _check_soc2(self, summary: dict) -> bool:
+        """检查 SOC 2 合规性"""
+        return summary.get("success_rate", 0) >= 0.95
+    
+    def _generate_recommendations(self, summary: dict) -> list:
+        """生成改进建议"""
+        recommendations = []
+        
+        if summary.get("success_rate", 0) < 0.95:
+            recommendations.append("增加 embed_strength 以提高成功率")
+        
+        if summary.get("avg_embed_time", 0) > 2.0:
+            recommendations.append("降低 DPI 以提高处理速度")
+        
+        return recommendations
+
+# 使用示例
+with open("benchmark_results/benchmark_report_*.json") as f:
+    benchmark_data = json.load(f)
+
+reporter = ComplianceReporter(benchmark_data)
+compliance_report = reporter.generate_compliance_report()
+
+print(f"合规状态: {compliance_report['compliance_status']}")
+print(f"ISO 27001: {'✓' if compliance_report['compliance_certifications']['iso27001'] else '✗'}")
+print(f"GDPR: {'✓' if compliance_report['compliance_certifications']['gdpr'] else '✗'}")
+print(f"SOC 2: {'✓' if compliance_report['compliance_certifications']['soc2'] else '✗'}")
+```
+
+### 定期审计建议
+
+**审计频率**：
+- 初始部署：每周测试
+- 稳定运行：每月测试
+- 合规要求：每季度完整审计
+
+**审计内容**：
+1. 运行完整基准测试套件
+2. 生成并归档报告
+3. 检查成功率趋势
+4. 审查审计日志
+5. 更新合规文档
 
 ## 故障排查
 
