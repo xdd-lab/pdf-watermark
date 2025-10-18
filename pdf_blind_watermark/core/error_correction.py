@@ -40,6 +40,10 @@ class ErrorCorrection:
         """Decode and correct errors in data."""
         try:
             decoded = self.rs.decode(data)
+            # RSCodec.decode returns a tuple: (decoded_data, decoded_data_with_ecc, errata)
+            # We want just the first element (the decoded data without ECC)
+            if isinstance(decoded, tuple):
+                decoded = decoded[0]
             return bytes(decoded)
         except (reedsolo.ReedSolomonError, Exception):
             return None

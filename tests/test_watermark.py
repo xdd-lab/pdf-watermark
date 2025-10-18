@@ -20,6 +20,6 @@ def test_embed_and_extract_round_trip():
 
     watermark_text = "CTO.NEW-WATERMARK-123"
     watermarked_image = watermarker.embed_image(image, watermark_text)
-    extracted_text = watermarker.extract_from_image(watermarked_image)
+    result = watermarker.extract_from_image(watermarked_image)
 
-    assert extracted_text == watermark_text
+    assert result.watermark_text == watermark_text
