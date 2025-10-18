@@ -40,6 +40,8 @@ class ErrorCorrection:
         """Decode and correct errors in data."""
         try:
             decoded = self.rs.decode(data)
+            if isinstance(decoded, tuple):
+                return bytes(decoded[0])
             return bytes(decoded)
         except (reedsolo.ReedSolomonError, Exception):
             return None

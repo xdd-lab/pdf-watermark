@@ -2,7 +2,11 @@
 
 一个面向企业文档安全场景的 **PDF 全盲水印系统**，可在不依赖原始文档的情况下，从截屏、拍照等图像中准确提取水印。系统在保证视觉无感知的同时，重点兼顾鲁棒性、性能以及生成文件体积。
 
+此外，系统还提供 **PDF 文本隐写术模块**，可通过零宽字符和隐形文本将结构化元数据（用户 ID、时间戳、追踪令牌）隐藏到 PDF 文档中。
+
 ## 核心特性
+
+### 图像水印（DWT + DCT）
 
 - ✅ **频域全盲水印**：基于 DWT + DCT 的混合频域嵌入策略
 - ✅ **高鲁棒性**：对截图、拍照、压缩、缩放、轻度旋转等操作具有良好抵抗力
@@ -11,6 +15,15 @@
 - ✅ **纠错加固**：集成 Reed-Solomon 纠错，抵御噪声与失真
 - ✅ **透视校正**：自动检测页面边界，矫正拍照带来的透视畸变
 - ✅ **灵活配置**：可调节水印强度、嵌入分块大小、PDF 输出质量等参数
+
+### 文本隐写术（Zero-Width Characters）
+
+- ✅ **隐形嵌入**：使用零宽 Unicode 字符进行隐写编码
+- ✅ **结构化元数据**：支持用户 ID、时间戳、追踪令牌及自定义字段
+- ✅ **可选压缩**：zlib 压缩减少元数据体积
+- ✅ **纠错编码**：Reed-Solomon 纠错提高对文档编辑的容错性
+- ✅ **多页支持**：在多页 PDF 中分散嵌入元数据
+- ✅ **容量分析**：嵌入前检查 PDF 容量
 
 ## 技术原理概览
 
@@ -66,6 +79,44 @@ text = watermarker.extract(
 print(text)
 ```
 
+### 文本隐写术 API
+
+```python
+from pdf_blind_watermark import PDFSteganography, StegoMetadata
+
+# 初始化隐写引擎
+stego = PDFSteganography(
+    use_compression=True,
+    use_ecc=True,
+    ecc_symbols=32
+)
+
+# 创建元数据
+metadata = StegoMetadata.create(
+    user_id="user_12345",
+    tracking_token="abc123xyz789"
+)
+
+# 嵌入元数据
+stego.embed(
+    input_pdf="original.pdf",
+    output_pdf="tracked.pdf",
+    metadata=metadata
+)
+
+# 提取元数据
+extracted = stego.extract("tracked.pdf")
+print(f"User: {extracted.user_id}")
+print(f"Token: {extracted.tracking_token}")
+print(f"Timestamp: {extracted.timestamp}")
+
+# 检查容量
+capacity = stego.get_capacity_info("document.pdf")
+print(f"Estimated capacity: {capacity.estimated_capacity_bytes} bytes")
+```
+
+详细文档请参阅 [STEGANOGRAPHY.md](STEGANOGRAPHY.md)
+
 ## 命令行用法
 
 ```bash
@@ -112,6 +163,11 @@ pdf_blind_watermark/
 │   ├── dwt_watermark.py   # 备用的 DWT 水印实现（示例）
 │   ├── error_correction.py # Reed-Solomon 纠错封装
 │   └── watermark.py       # 主水印逻辑（DWT + DCT）
+├── steganography/
+│   ├── text_encoder.py    # 零宽字符编码/解码
+│   ├── pdf_stego.py       # PDF 文本隐写主逻辑
+│   ├── metadata.py        # 结构化元数据
+│   └── capacity.py        # 容量分析
 ├── pdf/
 │   └── processor.py       # 基于 PyMuPDF 的 PDF 渲染与生成
 ├── image/
@@ -127,10 +183,20 @@ pdf_blind_watermark/
 项目包含基础单元测试，验证嵌入与提取的闭环正确性：
 
 ```bash
+# 图像水印测试
 pytest tests/test_watermark.py
+
+# 文本隐写术测试
+pytest tests/test_text_encoder.py
+pytest tests/test_metadata.py
+pytest tests/test_capacity.py
+pytest tests/test_pdf_steganography.py
+
+# 运行所有测试
+pytest tests/
 ```
 
-> 测试使用合成图像，可根据实际业务场景扩展更多鲁棒性测试脚本。
+> 测试使用合成图像和 PDF，可根据实际业务场景扩展更多鲁棒性测试脚本。
 
 ## 开源协议
 
